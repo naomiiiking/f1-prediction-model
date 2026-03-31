@@ -7,7 +7,11 @@ MODELS_DIR = ROOT / "models"
 
 OPENF1_BASE_URL = "https://api.openf1.org/v1"
 
-SEASONS = [2024]
+SEASONS = [2024, 2025, 2026]
+
+# How much to weight each season's races during training
+# Higher = model pays more attention to that season
+SEASON_WEIGHTS = {2024: 1.0, 2025: 1.5, 2026: 3.0}
 
 HF_REPO_ID = "username/f1-race-predictor"  # TODO: update this later
 
