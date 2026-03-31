@@ -30,6 +30,8 @@ def get(endpoint: str, params: dict, retries: int = 8) -> list[dict]:
             print(f"  Rate limited. Waiting {wait}s...")
             time.sleep(wait)
             continue
+        if response.status_code == 404:
+            return []
         response.raise_for_status()
         return response.json()
     raise RuntimeError(f"Failed after {retries} retries: {url}")
