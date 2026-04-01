@@ -75,8 +75,14 @@ def build_race_features(session: dict) -> pd.DataFrame:
     drivers["grid_position"] = drivers["grid_position"].astype(int)
     drivers["positions_gained"] = drivers["grid_position"] - drivers["final_position"]
 
-    best_time = drivers["best_lap_time"].min()
-    drivers["lap_time_delta"] = drivers["best_lap_time"] - best_time
+    if "best_lap_time" in drivers.columns:
+        best_time = drivers["best_lap_time"].min()
+        drivers["lap_time_delta"] = drivers["best_lap_time"] - best_time
+    else:
+        drivers["avg_lap_time"] = None
+        drivers["best_lap_time"] = None
+        drivers["lap_count"] = None
+        drivers["lap_time_delta"] = None
 
     return drivers
 
