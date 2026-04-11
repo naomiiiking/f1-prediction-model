@@ -15,5 +15,18 @@ SEASON_WEIGHTS = {2024: 1.0, 2025: 1.5, 2026: 3.0}
 
 HF_REPO_ID = "username/f1-race-predictor"  # TODO: update this later
 
+FEATURE_COLUMNS = [
+    "grid_position",
+    "pit_stop_count",
+    "avg_lap_time",
+    "best_lap_time",
+    "lap_time_delta",
+    "lap_count",
+    "circuit_key",
+    "team_encoded",
+    "driver_encoded",
+    "quali_lap_time",
+]
+
 TARGET_COLUMN = "final_position"
 RANDOM_SEED = 42 # Reused training seed

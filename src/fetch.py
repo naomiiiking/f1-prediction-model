@@ -94,6 +94,25 @@ def fetch_session_data(session_key: int, session_name: str) -> dict:
 
     return result
 
+def fetch_qualifying_time(meeting_key: int, session_name: str) -> list[dict]:
+    meeting_sessions = load_or_fetch(
+        name=f"meeting_sessions_{meeting_key}",
+        endpoint="sessions",
+        params={"meeting_key": meeting_key},
+    )
+
+    qual_sessions = [s for s in meeting_sessions if s.get("session_type") == "Qualifying"]
+    if not qual_sessions:
+        return []
+
+    qual_key = qual_sessions[0]["session_key"]
+    name = session_name.replace(" ", "_").lower()
+
+    return load_or_fetch(
+        name=f"qualifying_{qual_key}_{name}_starting_grid",
+        endpoint="starting_grid",
+        params={"session_key": qual_key},
+    )
 
 def fetch_qualifying_positions(meeting_key: int, session_name: str) -> list[dict]:
     """Fetch the qualifying session that corresponds to a race weeken """
@@ -134,6 +153,7 @@ def fetch_all(seasons: list[int] = SEASONS) -> dict[int, dict]:
             session_data = fetch_session_data(key, session_name)
             session_data["meta"] = session
             session_data["qualifying"] = fetch_qualifying_positions(meeting_key, session_name)
+            session_data["starting_grid"] = fetch_qualifying_time(meeting_key, session_name)
             all_data[key] = session_data
 
     print(f"\nDone. Fetched {len(all_data)} sessions total.")

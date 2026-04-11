@@ -27,6 +27,11 @@ def get_pit_counts(pit_data: list[dict]) -> dict[int, int]:
         return {}
     return df.groupby("driver_number").size().to_dict()
 
+def get_qualifying_time(starting_grid: list[dict]) -> dict[int, float]:
+    df = pd.DataFrame(starting_grid)
+    if df.empty:
+        return {}
+    return df.set_index("driver_number")["lap_duration"].to_dict()
 
 def get_lap_stats(lap_data: list[dict]) -> pd.DataFrame:
     """Return a list of lap times in a race by driver"""
@@ -40,7 +45,6 @@ def get_lap_stats(lap_data: list[dict]) -> pd.DataFrame:
         lap_count="count",
     ).reset_index()
     return stats
-
 
 def build_race_features(session: dict) -> pd.DataFrame:
     """Assembly function, creates race table with all driver records"""
@@ -74,6 +78,10 @@ def build_race_features(session: dict) -> pd.DataFrame:
     drivers["final_position"] = drivers["final_position"].astype(int)
     drivers["grid_position"] = drivers["grid_position"].astype(int)
     drivers["positions_gained"] = drivers["grid_position"] - drivers["final_position"]
+
+    quali_time = get_qualifying_time(session.get("starting_grid", []))
+    drivers["quali_lap_time"] = drivers["driver_number"].map(quali_time)
+
 
     if "best_lap_time" in drivers.columns:
         best_time = drivers["best_lap_time"].min()

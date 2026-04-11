@@ -3,27 +3,15 @@ import xgboost as xgb
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.preprocessing import LabelEncoder
 import joblib
-from config import DATA_PROCESSED, MODELS_DIR, TARGET_COLUMN, RANDOM_SEED, SEASON_WEIGHTS
-
-# Model inputs
-FEATURE_COLUMNS = [
-    "grid_position",
-    "pit_stop_count",
-    "avg_lap_time",
-    "best_lap_time",
-    "lap_time_delta",
-    "lap_count",
-    "circuit_key",
-    "team_encoded",
-    "driver_encoded",
-]
+from config import DATA_PROCESSED, MODELS_DIR, TARGET_COLUMN, RANDOM_SEED, SEASON_WEIGHTS, SEASONS, FEATURE_COLUMNS
 
 def load_data() -> pd.DataFrame:
     """Load input data from config"""
     path = DATA_PROCESSED / "features.csv"
     if not path.exists():
         raise FileNotFoundError(f"No processed data at {path}. Run features.py first.")
-    return pd.read_csv(path)
+    df = pd.read_csv(path)
+    return df[df["year"].isin(SEASONS)]
 
 
 def encode_categoricals(df: pd.DataFrame):

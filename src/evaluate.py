@@ -4,19 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.metrics import mean_absolute_error
 import xgboost as xgb
-from config import MODELS_DIR
-
-FEATURE_COLUMNS = [
-    "grid_position",
-    "pit_stop_count",
-    "avg_lap_time",
-    "best_lap_time",
-    "lap_time_delta",
-    "lap_count",
-    "circuit_key",
-    "team_encoded",
-    "driver_encoded",
-]
+from config import MODELS_DIR, FEATURE_COLUMNS
 
 
 def load_model() -> xgb.XGBRegressor:
