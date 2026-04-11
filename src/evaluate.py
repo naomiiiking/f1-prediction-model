@@ -13,7 +13,6 @@ FEATURE_COLUMNS = [
     "best_lap_time",
     "lap_time_delta",
     "lap_count",
-    "positions_gained",
     "circuit_key",
     "team_encoded",
     "driver_encoded",
@@ -53,17 +52,6 @@ def evaluate_race(y_true: pd.Series, y_pred: np.ndarray, race_name: str = ""):
     print(f"Podium accuracy:  {podium_accuracy(y_true, y_pred):.0%}")
 
 
-def evaluate_all(X_test: pd.DataFrame, y_test: pd.Series, model: xgb.XGBRegressor):
-    y_pred = model.predict(X_test)
-
-    print("\n=== Overall Test Set ===")
-    print(f"MAE:              {mae(y_test, y_pred):.2f} positions")
-    print(f"Spearman r:       {spearman(y_test, y_pred):.3f}")
-
-    plot_feature_importance(model)
-    return y_pred
-
-
 def plot_feature_importance(model: xgb.XGBRegressor):
     importance = model.get_booster().get_score(importance_type="gain")
     features = list(importance.keys())
@@ -76,3 +64,31 @@ def plot_feature_importance(model: xgb.XGBRegressor):
     plt.tight_layout()
     plt.savefig(MODELS_DIR / "feature_importance.png")
     print(f"\nFeature importance plot saved to {MODELS_DIR / 'feature_importance.png'}")
+
+
+def evaluate_all(X_test: pd.DataFrame, y_test: pd.Series, model: xgb.XGBRegressor):
+    y_pred = model.predict(X_test)
+
+    print("\n=== Overall Test Set ===")
+    print(f"MAE:              {mae(y_test, y_pred):.2f} positions")
+    print(f"Spearman r:       {spearman(y_test, y_pred):.3f}")
+
+    plot_feature_importance(model)
+    return y_pred
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.insert(0, ".")
+    from src.train import load_data, encode_categoricals, split_by_race
+
+    df = load_data()
+    df, _, _ = encode_categoricals(df)
+    df = df.dropna(subset=FEATURE_COLUMNS + ["final_position"])
+    _, test_df = split_by_race(df)
+
+    X_test = test_df[FEATURE_COLUMNS]
+    y_test = test_df["final_position"]
+
+    model = load_model()
+    evaluate_all(X_test, y_test, model)

@@ -13,7 +13,6 @@ FEATURE_COLUMNS = [
     "best_lap_time",
     "lap_time_delta",
     "lap_count",
-    "positions_gained",
     "circuit_key",
     "team_encoded",
     "driver_encoded",

@@ -16,4 +16,4 @@ SEASON_WEIGHTS = {2024: 1.0, 2025: 1.5, 2026: 3.0}
 HF_REPO_ID = "username/f1-race-predictor"  # TODO: update this later
 
 TARGET_COLUMN = "final_position"
-RANDOM_SEED = 42
+RANDOM_SEED = 42 # Reused training seed
