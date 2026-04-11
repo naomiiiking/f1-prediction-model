@@ -65,8 +65,10 @@ if __name__ == "__main__":
 
     print("Fetching 2026 sessions...")
     all_sessions = fetch_all([2026])
-    latest_key = max(all_sessions.keys())
-    latest_session = all_sessions[latest_key]
+    latest_session = next(
+        s for s in sorted(all_sessions.values(), key=lambda s: s["meta"]["session_key"], reverse=True)
+        if s.get("position")
+    )
 
     circuit = latest_session["meta"].get("circuit_short_name", "unknown")
     print(f"\nPredicting: {circuit} {latest_session['meta'].get('year', 2026)}")
