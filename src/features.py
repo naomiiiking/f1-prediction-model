@@ -1,9 +1,9 @@
 import pandas as pd
+from tqdm import tqdm
 from config import DATA_PROCESSED
 
 
 def get_final_positions(position_data: list[dict]) -> dict[int, int]:
-    """Return a dict of driver_number: final_position"""
     df = pd.DataFrame(position_data)
     if df.empty:
         return {}
@@ -12,7 +12,6 @@ def get_final_positions(position_data: list[dict]) -> dict[int, int]:
 
 
 def get_grid_positions(qualifying_data: list[dict]) -> dict[int, int]:
-    """Return a dict of driver_number: quali position"""
     df = pd.DataFrame(qualifying_data)
     if df.empty:
         return {}
@@ -20,25 +19,30 @@ def get_grid_positions(qualifying_data: list[dict]) -> dict[int, int]:
     return df.groupby("driver_number")["position"].last().to_dict()
 
 
-def get_pit_counts(pit_data: list[dict]) -> dict[int, int]:
-    """Return a dict of driver_number: pit counts"""
-    df = pd.DataFrame(pit_data)
-    if df.empty:
-        return {}
-    return df.groupby("driver_number").size().to_dict()
-
 def get_qualifying_time(starting_grid: list[dict]) -> dict[int, float]:
     df = pd.DataFrame(starting_grid)
     if df.empty:
         return {}
     return df.set_index("driver_number")["lap_duration"].to_dict()
 
-def get_lap_stats(lap_data: list[dict]) -> pd.DataFrame:
-    """Return a list of lap times in a race by driver"""
+
+def get_pit_counts_up_to(pit_data: list[dict], up_to_lap: int) -> dict[int, int]:
+    df = pd.DataFrame(pit_data)
+    if df.empty:
+        return {}
+    if "lap_number" in df.columns:
+        df = df[df["lap_number"] <= up_to_lap]
+    return df.groupby("driver_number").size().to_dict()
+
+
+def get_lap_stats_up_to(lap_data: list[dict], up_to_lap: int) -> pd.DataFrame:
     df = pd.DataFrame(lap_data)
     if df.empty:
         return pd.DataFrame()
-    df = df[df["lap_duration"].notna()] # Drops rows where lab_duration is missing (driver has retired)
+    df = df[df["lap_number"] <= up_to_lap]
+    df = df[df["lap_duration"].notna()]
+    if df.empty:
+        return pd.DataFrame()
     stats = df.groupby("driver_number")["lap_duration"].agg(
         avg_lap_time="mean",
         best_lap_time="min",
@@ -46,12 +50,41 @@ def get_lap_stats(lap_data: list[dict]) -> pd.DataFrame:
     ).reset_index()
     return stats
 
-def build_race_features(session: dict) -> pd.DataFrame:
-    """Assembly function, creates race table with all driver records"""
+
+def get_position_at_lap(position_data: list[dict], laps_data: list[dict], up_to_lap: int) -> dict[int, int]:
+    pos_df = pd.DataFrame(position_data)
+    laps_df = pd.DataFrame(laps_data)
+
+    if pos_df.empty or laps_df.empty:
+        return {}
+
+    pos_df["date"] = pd.to_datetime(pos_df["date"], utc=True)
+    laps_df["date_start"] = pd.to_datetime(laps_df["date_start"], utc=True)
+
+    next_lap_rows = laps_df[laps_df["lap_number"] == up_to_lap + 1]
+    if not next_lap_rows.empty:
+        cutoff = next_lap_rows["date_start"].min()
+    else:
+        cutoff = pos_df["date"].max()
+
+    filtered = pos_df[pos_df["date"] <= cutoff].sort_values("date")
+    if filtered.empty:
+        return {}
+
+    return filtered.groupby("driver_number")["position"].last().to_dict()
+
+
+def build_lap_snapshot(session: dict, up_to_lap: int) -> pd.DataFrame:
     final_positions = get_final_positions(session.get("position", []))
     grid_positions = get_grid_positions(session.get("qualifying", []))
-    pit_counts = get_pit_counts(session.get("pit", []))
-    lap_stats = get_lap_stats(session.get("laps", []))
+    quali_time = get_qualifying_time(session.get("starting_grid", []))
+    current_positions = get_position_at_lap(
+        session.get("position", []),
+        session.get("laps", []),
+        up_to_lap,
+    )
+    pit_counts = get_pit_counts_up_to(session.get("pit", []), up_to_lap)
+    lap_stats = get_lap_stats_up_to(session.get("laps", []), up_to_lap)
 
     drivers = pd.DataFrame(session.get("drivers", []))
     if drivers.empty:
@@ -62,7 +95,10 @@ def build_race_features(session: dict) -> pd.DataFrame:
 
     drivers["final_position"] = drivers["driver_number"].map(final_positions)
     drivers["grid_position"] = drivers["driver_number"].map(grid_positions)
+    drivers["quali_lap_time"] = drivers["driver_number"].map(quali_time)
+    drivers["current_position"] = drivers["driver_number"].map(current_positions)
     drivers["pit_stop_count"] = drivers["driver_number"].map(pit_counts).fillna(0)
+    drivers["current_lap"] = up_to_lap
 
     if not lap_stats.empty:
         lap_stats["driver_number"] = lap_stats["driver_number"].astype(int)
@@ -74,14 +110,7 @@ def build_race_features(session: dict) -> pd.DataFrame:
     drivers["session_key"] = meta.get("session_key", -1)
     drivers["year"] = meta.get("year", -1)
 
-    drivers = drivers.dropna(subset=["final_position", "grid_position"])
-    drivers["final_position"] = drivers["final_position"].astype(int)
-    drivers["grid_position"] = drivers["grid_position"].astype(int)
-    drivers["positions_gained"] = drivers["grid_position"] - drivers["final_position"]
-
-    quali_time = get_qualifying_time(session.get("starting_grid", []))
-    drivers["quali_lap_time"] = drivers["driver_number"].map(quali_time)
-
+    drivers = drivers.dropna(subset=["grid_position"])
 
     if "best_lap_time" in drivers.columns:
         best_time = drivers["best_lap_time"].min()
@@ -95,12 +124,23 @@ def build_race_features(session: dict) -> pd.DataFrame:
     return drivers
 
 
-def build_dataset(all_sessions: dict) -> pd.DataFrame:
+def build_dataset(all_sessions: dict, lap_step: int = 1) -> pd.DataFrame:
     frames = []
-    for session in all_sessions.values():
-        df = build_race_features(session)
-        if not df.empty:
-            frames.append(df)
+
+    for session_key, session in tqdm(all_sessions.items(), desc="Sessions"):
+        laps_df = pd.DataFrame(session.get("laps", []))
+        if laps_df.empty:
+            continue
+
+        max_lap = int(laps_df["lap_number"].max())
+
+        for lap in range(lap_step, max_lap + 1, lap_step):
+            df = build_lap_snapshot(session, lap)
+            if df.empty:
+                continue
+            df = df.dropna(subset=["final_position"])
+            if not df.empty:
+                frames.append(df)
 
     if not frames:
         return pd.DataFrame()

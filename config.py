@@ -17,6 +17,9 @@ HF_REPO_ID = "username/f1-race-predictor"  # TODO: update this later
 
 FEATURE_COLUMNS = [
     "grid_position",
+    "quali_lap_time",
+    "current_lap",
+    "current_position",
     "pit_stop_count",
     "avg_lap_time",
     "best_lap_time",
@@ -25,7 +28,6 @@ FEATURE_COLUMNS = [
     "circuit_key",
     "team_encoded",
     "driver_encoded",
-    "quali_lap_time",
 ]
 
 TARGET_COLUMN = "final_position"

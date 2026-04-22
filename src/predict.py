@@ -1,20 +1,8 @@
+import time
 import pandas as pd
 import joblib
 import xgboost as xgb
-from config import MODELS_DIR
-
-FEATURE_COLUMNS = [
-    "grid_position",
-    "pit_stop_count",
-    "avg_lap_time",
-    "best_lap_time",
-    "lap_time_delta",
-    "lap_count",
-    "positions_gained",
-    "circuit_key",
-    "team_encoded",
-    "driver_encoded",
-]
+from config import MODELS_DIR, FEATURE_COLUMNS
 
 
 def load_artifacts():
@@ -38,39 +26,74 @@ def encode(df: pd.DataFrame, team_enc, driver_enc) -> pd.DataFrame:
     return df
 
 
-def predict(session: dict) -> pd.DataFrame:
-    from src.features import build_race_features
-
-    model, team_enc, driver_enc = load_artifacts()
-
-    df = build_race_features(session)
-    if df.empty:
-        raise ValueError("Could not build features for this session.")
-
+def predict_from_snapshot(df: pd.DataFrame, model, team_enc, driver_enc) -> pd.DataFrame:
     df = encode(df, team_enc, driver_enc)
     df = df.dropna(subset=FEATURE_COLUMNS)
+    if df.empty:
+        return pd.DataFrame()
 
     X = df[FEATURE_COLUMNS]
-    raw_scores = model.predict(X)
-
-    df["predicted_score"] = raw_scores
+    df = df.copy()
+    df["predicted_score"] = model.predict(X)
     df["predicted_position"] = df["predicted_score"].rank().astype(int)
 
-    result = df[["full_name", "team_name", "predicted_position"]].sort_values("predicted_position")
-    return result
+    return df[["full_name", "team_name", "current_position", "predicted_position"]].sort_values("predicted_position")
+
+
+def run_live():
+    from src.fetch import fetch_live, fetch_session_data, fetch_qualifying_positions, fetch_qualifying_time
+    from src.features import build_lap_snapshot
+
+    sessions = fetch_live("sessions", {"session_type": "Race", "session_key": "latest"})
+    if not sessions:
+        print("No live session found.")
+        return
+
+    session_meta = sessions[0]
+    session_key = session_meta["session_key"]
+    meeting_key = session_meta.get("meeting_key", session_key)
+    session_name = session_meta.get("session_name", "Race")
+    circuit = session_meta.get("circuit_short_name", "unknown")
+    print(f"Live session: {circuit} (key={session_key})")
+
+    session = fetch_session_data(session_key, session_name)
+    session["meta"] = session_meta
+    session["qualifying"] = fetch_qualifying_positions(meeting_key, session_name)
+    session["starting_grid"] = fetch_qualifying_time(meeting_key, session_name)
+
+    model, team_enc, driver_enc = load_artifacts()
+    last_predicted_lap = 0
+
+    while True:
+        laps = fetch_live("laps", {"session_key": session_key})
+        if not laps:
+            print("Waiting for race to start...")
+            time.sleep(30)
+            continue
+
+        laps_df = pd.DataFrame(laps)
+        latest_lap = int(laps_df["lap_number"].max())
+
+        if latest_lap <= last_predicted_lap:
+            time.sleep(10)
+            continue
+
+        session["laps"] = laps
+        session["position"] = fetch_live("position", {"session_key": session_key})
+        session["pit"] = fetch_live("pit", {"session_key": session_key})
+
+        snapshot = build_lap_snapshot(session, latest_lap)
+        result = predict_from_snapshot(snapshot, model, team_enc, driver_enc)
+
+        if result.empty:
+            time.sleep(10)
+            continue
+
+        print(f"\n=== Lap {latest_lap} — {circuit} ===")
+        print(result.to_string(index=False))
+        last_predicted_lap = latest_lap
+        time.sleep(10)
 
 
 if __name__ == "__main__":
-    from src.fetch import fetch_all
-
-    print("Fetching 2026 sessions...")
-    all_sessions = fetch_all([2026])
-    latest_session = next(
-        s for s in sorted(all_sessions.values(), key=lambda s: s["meta"]["session_key"], reverse=True)
-        if s.get("position")
-    )
-
-    circuit = latest_session["meta"].get("circuit_short_name", "unknown")
-    print(f"\nPredicting: {circuit} {latest_session['meta'].get('year', 2026)}")
-    result = predict(latest_session)
-    print(result.to_string(index=False))
+    run_live()

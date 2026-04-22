@@ -160,5 +160,9 @@ def fetch_all(seasons: list[int] = SEASONS) -> dict[int, dict]:
     return all_data
 
 
+def fetch_live(endpoint: str, params: dict) -> list[dict]:
+    return get(endpoint, params)
+
+
 if __name__ == "__main__":
     fetch_all()
