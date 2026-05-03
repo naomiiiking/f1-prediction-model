@@ -92,6 +92,7 @@ def train_pre_race(df: pd.DataFrame):
         colsample_bytree=0.8,
         random_state=RANDOM_SEED,
         eval_metric="mae",
+        early_stopping_rounds=20,
     )
 
     sample_weights = train_df["year"].map(SEASON_WEIGHTS).fillna(1.0)
