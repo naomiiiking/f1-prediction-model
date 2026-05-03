@@ -58,8 +58,8 @@ def get_position_at_lap(position_data: list[dict], laps_data: list[dict], up_to_
     if pos_df.empty or laps_df.empty:
         return {}
 
-    pos_df["date"] = pd.to_datetime(pos_df["date"], utc=True)
-    laps_df["date_start"] = pd.to_datetime(laps_df["date_start"], utc=True)
+    pos_df["date"] = pd.to_datetime(pos_df["date"], utc=True, format="ISO8601")
+    laps_df["date_start"] = pd.to_datetime(laps_df["date_start"], utc=True, format="ISO8601")
 
     next_lap_rows = laps_df[laps_df["lap_number"] == up_to_lap + 1]
     if not next_lap_rows.empty:
