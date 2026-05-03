@@ -15,6 +15,14 @@ SEASON_WEIGHTS = {2024: 1.0, 2025: 1.5, 2026: 3.0}
 
 HF_REPO_ID = "username/f1-race-predictor"  # TODO: update this later
 
+PRE_RACE_FEATURE_COLUMNS = [
+    "grid_position",
+    "quali_lap_time",
+    "circuit_key",
+    "team_encoded",
+    "driver_encoded",
+]
+
 FEATURE_COLUMNS = [
     "grid_position",
     "quali_lap_time",

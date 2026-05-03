@@ -2,7 +2,7 @@ import time
 import pandas as pd
 import joblib
 import xgboost as xgb
-from config import MODELS_DIR, FEATURE_COLUMNS
+from config import MODELS_DIR, FEATURE_COLUMNS, PRE_RACE_FEATURE_COLUMNS
 
 
 def load_artifacts():
@@ -95,5 +95,58 @@ def run_live():
         time.sleep(10)
 
 
+def predict_pre_race():
+    from src.fetch import fetch_live
+    from src.features import get_grid_positions, get_qualifying_time
+
+    sessions = fetch_live("sessions", {"session_type": "Qualifying", "session_key": "latest"})
+    if not sessions:
+        print("No qualifying session found.")
+        return
+
+    session_meta = sessions[0]
+    qual_key = session_meta["session_key"]
+    circuit = session_meta.get("circuit_short_name", "unknown")
+    circuit_key = session_meta.get("circuit_key", -1)
+    print(f"Pre-race prediction: {circuit} (key={qual_key})")
+
+    drivers_raw = fetch_live("drivers", {"session_key": qual_key})
+    quali_positions = fetch_live("position", {"session_key": qual_key})
+    starting_grid = fetch_live("starting_grid", {"session_key": qual_key})
+
+    if not drivers_raw:
+        print("No driver data found.")
+        return
+
+    drivers = pd.DataFrame(drivers_raw)[["driver_number", "full_name", "team_name"]].copy()
+    drivers["driver_number"] = drivers["driver_number"].astype(int)
+    drivers["grid_position"] = drivers["driver_number"].map(get_grid_positions(quali_positions))
+    drivers["quali_lap_time"] = drivers["driver_number"].map(get_qualifying_time(starting_grid))
+    drivers["circuit_key"] = circuit_key
+
+    model = xgb.XGBRegressor()
+    model.load_model(MODELS_DIR / "model_prerace.ubj")
+    team_enc = joblib.load(MODELS_DIR / "team_encoder.pkl")
+    driver_enc = joblib.load(MODELS_DIR / "driver_encoder.pkl")
+
+    drivers = encode(drivers, team_enc, driver_enc)
+    drivers = drivers.dropna(subset=PRE_RACE_FEATURE_COLUMNS)
+    if drivers.empty:
+        print("Not enough data for prediction.")
+        return
+
+    drivers["predicted_score"] = model.predict(drivers[PRE_RACE_FEATURE_COLUMNS])
+    drivers["predicted_position"] = drivers["predicted_score"].rank().astype(int)
+
+    result = drivers[["predicted_position", "full_name", "team_name", "grid_position"]].sort_values("predicted_position")
+    print(f"\n=== Pre-race prediction: {circuit} ===")
+    print(result.to_string(index=False))
+    return result
+
+
 if __name__ == "__main__":
-    run_live()
+    import sys
+    if "--pre-race" in sys.argv:
+        predict_pre_race()
+    else:
+        run_live()
