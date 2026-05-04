@@ -21,7 +21,6 @@ from config import OPENF1_BASE_URL, DATA_RAW, SEASONS
 
 
 def get(endpoint: str, params: dict, retries: int = 8) -> list[dict]:
-    """Make a single GET request to the OpenF1 API, retrying on 429s."""
     url = f"{OPENF1_BASE_URL}/{endpoint}"
     for attempt in range(retries):
         response = requests.get(url, params=params, timeout=60)
